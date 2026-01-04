@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Re:Balance</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <!-- 引入必要的工具庫 (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 引入源泉黑體/思源黑體 (Noto Sans TC) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* 動畫定義 */
+    @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+    @keyframes slide-up { 0% { transform: translateY(100%); opacity: 0.5; } 100% { transform: translateY(0); opacity: 1; } }
+    .animate-fade-in { animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-slide-up { animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    
+    /* 隱藏滾動條但保留功能 */
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* 防止 iOS 點擊閃爍與橡皮筋效果，並套用源泉黑體 */
+    body { 
+      font-family: 'Noto Sans TC', sans-serif;
+      -webkit-tap-highlight-color: transparent; 
+      overscroll-behavior-y: none;
+    }
+    
+    /* 優化輸入體驗 */
+    input, textarea {
+      font-size: 16px !important; /* 防止 iOS Safari 自動放大 */
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-[#F2F4F6] text-[#5E6160]">
+  <div id="root" class="min-h-[100dvh] w-full flex justify-center bg-[#E0E0E0]"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- 內嵌圖示組件 ---
+    const IconBase = ({ d, size = 24, className = "", ...props }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+        {d}
+      </svg>
+    );
+
+    const Wind = (props) => <IconBase d={<><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></>} {...props} />;
+    const Home = (props) => <IconBase d={<><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>} {...props} />;
+    const Wallet = (props) => <IconBase d={<><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></>} {...props} />;
+    const Plus = (props) => <IconBase d={<><path d="M5 12h14"/><path d="M12 5v14"/></>} {...props} />;
+    const X = (props) => <IconBase d={<><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>} {...props} />;
+    const ChevronRight = (props) => <IconBase d={<path d="m9 18 6-6-6-6"/>} {...props} />;
+    const CloudRain = (props) => <IconBase d={<><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></>} {...props} />;
+    const Sun = (props) => <IconBase d={<><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></>} {...props} />;
+    const Zap = (props) => <IconBase d={<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>} {...props} />;
+    const Heart = (props) => <IconBase d={<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>} {...props} />;
+    const Shield = (props) => <IconBase d={<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>} {...props} />;
+    const TrendingUp = (props) => <IconBase d={<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>} {...props} />;
+    const Anchor = (props) => <IconBase d={<><circle cx="12" cy="5" r="3"/><line x1="12" x2="12" y1="22" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></>} {...props} />;
+    const ArrowRight = (props) => <IconBase d={<><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></>} {...props} />;
+    const User = (props) => <IconBase d={<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>} {...props} />;
+    const CalendarIcon = (props) => <IconBase d={<><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>} {...props} />;
+    const CreditCard = (props) => <IconBase d={<><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></>} {...props} />;
+    const MoreHorizontal = (props) => <IconBase d={<><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></>} {...props} />;
+    const CheckCircle = (props) => <IconBase d={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} {...props} />;
+    const Share = (props) => <IconBase d={<><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></>} {...props} />;
+    const Copy = (props) => <IconBase d={<><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></>} {...props} />;
+    const FileText = (props) => <IconBase d={<><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></>} {...props} />;
+    const Edit3 = (props) => <IconBase d={<><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>} {...props} />;
+    const Flag = (props) => <IconBase d={<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></>} {...props} />;
+
+    // --- Helper Hook for LocalStorage ---
+    function useStickyState(defaultValue, key) {
+      const [value, setValue] = useState(() => {
+        try {
+          const stickyValue = window.localStorage.getItem(key);
+          return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+        } catch (error) {
+          return defaultValue;
+        }
+      });
+
+      useEffect(() => {
+        try {
+          window.localStorage.setItem(key, JSON.stringify(value));
+        } catch (error) {
+          // Ignore
+        }
+      }, [key, value]);
+
+      return [value, setValue];
+    }
+
+    // --- Styles & Data ---
+    const colors = {
+      bg: "bg-[#F4F4F2]",
+      card: "bg-[#FEFEFE]",
+      textPrimary: "text-[#5E6160]",
+      textSecondary: "text-[#8E918F]",
+      accentBlue: "bg-[#B4C5C8]",
+      accentRose: "bg-[#D8C4C1]",
+      barPositive: "bg-[#C4CEC2]",
+      barNegative: "bg-[#D8C4C1]",
+      moodColors: {
+        chaos: 'bg-[#D8C4C1]',
+        anxious: 'bg-[#E6DED6]',
+        numb: 'bg-[#C8CCD4]',
+        calm: 'bg-[#B4C5C8]',
+        hope: 'bg-[#C4CEC2]',
+      }
+    };
+
+    const SUPPORT_QUOTES = [
+      "你不用急著變好，先讓自己舒服一點。",
+      "混亂是暫時的，你的價值是永恆的。",
+      "今天只要做到一件小事，就已經很棒了。",
+      "呼吸。這只是一個數字，它定義不了你。",
+      "錢流出去了，生活也流進來了。"
+    ];
+
+    const MOODS = [
+      { id: 'chaos', label: '混亂', icon: CloudRain, color: 'bg-[#D8C4C1]/30 text-[#8C6A66]' },
+      { id: 'anxious', label: '焦慮', icon: Zap, color: 'bg-[#E6DED6]/50 text-[#9C8C74]' },
+      { id: 'numb', label: '麻木', icon: Anchor, color: 'bg-[#C8CCD4]/40 text-[#6B7A8F]' },
+      { id: 'calm', label: '平靜', icon: Wind, color: 'bg-[#B4C5C8]/30 text-[#5A7D82]' },
+      { id: 'hope', label: '希望', icon: Sun, color: 'bg-[#C4CEC2]/40 text-[#6A7F66]' },
+    ];
+
+    const FEELING_TAGS = ['罪惡感', '必需', '紓壓', '愛自己', '社交', '衝動', '無感'];
+
+    const INITIAL_DEBTS = [
+      { id: 1, name: '範例：信貸 A', total: 300000, remaining: 240000, monthlyPay: 8000, interest: '3.5%', date: '每月 5 號' },
+    ];
+
+    // --- Components ---
+    const Card = ({ children, className = "", onClick, noPadding = false }) => (
+      <div 
+        onClick={onClick}
+        className={`${colors.card} shadow-sm border border-[#EAEAEA] rounded-[24px] ${noPadding ? '' : 'p-6'} ${className} ${onClick ? 'active:scale-[0.98] transition-transform duration-200 cursor-pointer' : ''}`}
+      >
+        {children}
+      </div>
+    );
+
+    const Button = ({ children, variant = "primary", onClick, className = "", disabled = false }) => {
+      const baseStyle = "w-full py-4 rounded-full font-medium text-[16px] tracking-wide transition-all duration-300 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
+      const variants = {
+        primary: "bg-[#5E6160] text-[#F4F4F2] shadow-md hover:bg-[#4A4D4C]",
+        secondary: "bg-[#E6DED6] text-[#5E6160] hover:bg-[#DBD3CB]",
+        ghost: "bg-transparent text-[#8E918F] hover:bg-[#F0F0F0]",
+        outline: "border border-[#D1D1D1] text-[#5E6160] hover:bg-[#FAFAFA]",
+        danger: "bg-[#D8C4C1] text-white hover:bg-[#C4B0AD]"
+      };
+      return (
+        <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+          {children}
+        </button>
+      );
+    };
+
+    const ToggleSwitch = ({ leftLabel, rightLabel, value, onChange }) => (
+      <div className="flex bg-[#F0F0F0] p-1 rounded-full relative cursor-pointer w-full" onClick={() => onChange(!value)}>
+        <div className={`w-1/2 text-center py-2 z-10 text-sm font-medium transition-colors duration-300 ${!value ? 'text-[#5E6160]' : 'text-[#9CA3AF]'}`}>{leftLabel}</div>
+        <div className={`w-1/2 text-center py-2 z-10 text-sm font-medium transition-colors duration-300 ${value ? 'text-[#5E6160]' : 'text-[#9CA3AF]'}`}>{rightLabel}</div>
+        <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-transform duration-300 ${value ? 'translate-x-[calc(100%+0px)]' : 'translate-x-0'}`} />
+      </div>
+    );
+
+    // --- Main App Logic ---
+    const App = () => {
+      const [view, setView] = useState('splash'); 
+      const [quote, setQuote] = useState(SUPPORT_QUOTES[0]);
+      
+      const [selectedMood, setSelectedMood] = useStickyState(null, 'rb_mood');
+      const [savings, setSavings] = useStickyState('0', 'rb_savings');
+      const [investments, setInvestments] = useStickyState('0', 'rb_investments');
+      const [debts, setDebts] = useStickyState(INITIAL_DEBTS, 'rb_debts');
+      const [transactions, setTransactions] = useStickyState([], 'rb_transactions');
+      
+      const [itemName, setItemName] = useState('');
+      const [amount, setAmount] = useState('');
+      const [selectedFeelings, setSelectedFeelings] = useState([]);
+      const [customNote, setCustomNote] = useState(''); 
+      const [isNeed, setIsNeed] = useState(false);
+      const [selectedDay, setSelectedDay] = useState(null);
+      const [showExportModal, setShowExportModal] = useState(false);
+      const [exportText, setExportText] = useState('');
+      const [isCopied, setIsCopied] = useState(false);
+
+      useEffect(() => {
+        if (view === 'splash') {
+          const timer = setTimeout(() => setView('home'), 2500);
+          return () => clearTimeout(timer);
+        }
+      }, [view]);
+
+      const handleAddTransaction = () => {
+        if (!amount) return;
+        const newTx = {
+          id: Date.now(),
+          date: new Date().toISOString(),
+          day: new Date().getDate(),
+          month: new Date().getMonth() + 1,
+          name: itemName || '未命名項目',
+          amount: parseInt(amount),
+          isNeed,
+          feelings: selectedFeelings,
+          note: customNote,
+          moodAtTime: selectedMood
+        };
+        setTransactions([newTx, ...transactions]);
+        setAmount('');
+        setItemName('');
+        setCustomNote('');
+        setSelectedFeelings([]);
+        setView('home');
+      };
+
+      const handleAddDebt = () => {
+        const newDebt = { 
+            id: Date.now(), 
+            name: '新債務', 
+            total: 0, 
+            remaining: 0, 
+            monthlyPay: 0, 
+            interest: '0%', 
+            date: '設定中' 
+        };
+        setDebts([...debts, newDebt]);
+      };
+
+      const calculateMonthlyBalance = () => {
+         const income = 42000; 
+         const currentMonth = new Date().getMonth() + 1;
+         const monthlySpend = transactions
+            .filter(t => t.month === currentMonth)
+            .reduce((acc, t) => acc + t.amount, 0);
+         return income - monthlySpend;
+      };
+
+      const getCalendarData = () => {
+          const days = {};
+          transactions.forEach(t => {
+              if (!days[t.day]) {
+                  days[t.day] = { day: t.day, spend: 0, items: [], mood: t.moodAtTime?.id || 'calm' };
+              }
+              days[t.day].spend += t.amount;
+              days[t.day].items.push({ 
+                name: t.name, 
+                amount: t.amount, 
+                feeling: t.isNeed ? 'Need' : 'Want',
+                note: t.note 
+              });
+          });
+          return Object.values(days);
+      };
+
+      const handleExport = () => {
+        const remainingDebt = debts.reduce((acc, curr) => parseInt(acc) + parseInt(curr.remaining || 0), 0);
+        const monthlyCommitment = debts.reduce((acc, curr) => parseInt(acc) + parseInt(curr.monthlyPay || 0), 0);
+        const monthlyBal = calculateMonthlyBalance();
+        const totalSafetyNet = parseInt(savings || 0) + parseInt(investments || 0) + monthlyBal;
+
+        const currentMonth = new Date().getMonth() + 1;
+        const monthTx = transactions.filter(t => t.month === currentMonth);
+        const totalSpend = monthTx.reduce((acc, t) => acc + t.amount, 0);
+        
+        const feelingCounts = {};
+        let notesText = ""; 
+
+        monthTx.forEach(t => {
+            const type = t.isNeed ? '必需 (Need)' : '想要 (Want)';
+            feelingCounts[type] = (feelingCounts[type] || 0) + 1;
+            t.feelings.forEach(f => {
+                feelingCounts[f] = (feelingCounts[f] || 0) + 1;
+            });
+            if (t.note) {
+              notesText += `- ${t.day}日 ${t.name}: ${t.note}\n`;
+            }
+        });
+
+        const report = `【Re:Balance 月度財務情緒報告】\n--------------------------------\n📅 月份: ${currentMonth}月\n👤 使用者狀態: ${selectedMood ? selectedMood.label : '尚未記錄'}\n\n💰 1. 財務流動概覽\n- 月預估收入: NT$ 42,000 (預設)\n- 本月總支出: NT$ ${totalSpend.toLocaleString()}\n- 本月結餘: NT$ ${monthlyBal.toLocaleString()}\n\n📊 2. 感受與消費統計\n${Object.entries(feelingCounts).map(([k, v]) => `- ${k}: ${v} 筆`).join('\n')}\n\n📝 3. 心情筆記\n${notesText || "無紀錄"}\n\n💳 4. 債務承諾\n- 債務總餘額: NT$ ${remainingDebt.toLocaleString()}\n- 每月固定還款: NT$ ${monthlyCommitment.toLocaleString()}\n\n🛡️ 5. 心理安全網 (Reality Mode)\n- 總防護網: NT$ ${totalSafetyNet.toLocaleString()}\n- 現金存款: NT$ ${parseInt(savings || 0).toLocaleString()}\n- 投資部位: NT$ ${parseInt(investments || 0).toLocaleString()}\n\n--------------------------------\n致 Re:Balance 教練：\n以上是我這個月的真實紀錄。請協助我檢視並給予建議。`.trim();
+
+        setExportText(report);
+        setShowExportModal(true);
+        setIsCopied(false);
+      };
+
+      const copyToClipboard = () => {
+        navigator.clipboard.writeText(exportText).then(() => {
+          setIsCopied(true);
+          setTimeout(() => setIsCopied(false), 2000);
+        });
+      };
+
+      // --- Views ---
+      const SplashScreen = () => (
+        <div className={`h-full w-full flex flex-col items-center justify-center ${colors.bg} px-8 text-center`}>
+          <div className="animate-pulse mb-8 opacity-60">
+            <Wind size={64} className="text-[#8E918F]" strokeWidth={1} />
+          </div>
+          <h1 className="text-3xl font-light tracking-[0.2em] text-[#5E6160] mb-6 fade-in-up">Re:Balance</h1>
+          <p className="text-[#8E918F] text-lg font-light leading-relaxed fade-in-up delay-100">
+            {quote}
+          </p>
+        </div>
+      );
+
+      const HomeView = () => (
+        <div className={`w-full max-w-md h-full bg-[#F4F4F2] flex flex-col relative`}>
+          <header className="pt-14 pb-8 px-6 bg-gradient-to-b from-[#EBEBE9] to-[#F4F4F2] flex-none">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <p className="text-[#8E918F] text-xs font-medium tracking-widest uppercase mb-2">Daily Support</p>
+                <h2 className="text-xl text-[#5E6160] font-light leading-normal">
+                  「{quote}」
+                </h2>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-[#E0E0E0] border-2 border-white flex items-center justify-center">
+                 <User size={20} className="text-white" />
+              </div>
+            </div>
+          </header>
+
+          <div className="px-6 space-y-8 flex-1 overflow-y-auto pb-32">
+            <section>
+              <div className="flex justify-between items-baseline mb-4">
+                <h3 className="text-lg font-medium text-[#5E6160]">今日狀態</h3>
+                <span className="text-xs text-[#8E918F]">Check-in</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
+                {MOODS.map((m) => (
+                  <div key={m.id} onClick={() => { setSelectedMood(m); }} className={`flex-shrink-0 w-20 h-24 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 ${selectedMood?.id === m.id ? 'ring-2 ring-[#B4C5C8] bg-white' : 'bg-white'}`}>
+                    <div className={`p-2 rounded-full ${m.color.split(' ')[0]}`}>
+                      <m.icon size={20} className={m.color.split(' ')[1]} />
+                    </div>
+                    <span className="text-xs text-[#8E918F] font-medium">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <div className="flex justify-between items-baseline mb-4">
+                <h3 className="text-lg font-medium text-[#5E6160]">記帳與感受</h3>
+                <span className="text-xs text-[#8E918F]">Rebalance</span>
+              </div>
+              <Card onClick={() => setView('transaction')} className="flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-[#E6DED6] flex items-center justify-center text-[#9C8C74]">
+                    <Plus size={24} />
+                  </div>
+                  <div>
+                    <p className="text-[#5E6160] font-medium">記錄一筆流動</p>
+                    <p className="text-xs text-[#8E918F] mt-1">重點不是金額，是感受</p>
+                  </div>
+                </div>
+                <ChevronRight size={20} className="text-[#D1D1D1] group-hover:translate-x-1 transition-transform" />
+              </Card>
+            </section>
+
+            <section className="grid grid-cols-2 gap-4">
+              <Card onClick={() => setView('calendar')} className="bg-white border-none py-4 flex flex-col items-center justify-center gap-2">
+                <CalendarIcon size={24} className="text-[#B4C5C8]" />
+                <span className="text-sm text-[#5E6160]">心靈日曆</span>
+              </Card>
+              <Card onClick={() => setView('debt')} className="bg-white border-none py-4 flex flex-col items-center justify-center gap-2">
+                <CreditCard size={24} className="text-[#D8C4C1]" />
+                <span className="text-sm text-[#5E6160]">還款規劃</span>
+              </Card>
+            </section>
+          </div>
+        </div>
+      );
+
+      const TransactionView = () => (
+        <div className={`w-full max-w-md h-full bg-[#F4F4F2] flex flex-col relative`}>
+          <header className="flex-none pt-12 px-6 flex justify-between items-center mb-4">
+            <button onClick={() => setView('home')} className="p-2 -ml-2 rounded-full hover:bg-black/5">
+              <X size={24} className="text-[#5E6160]" />
+            </button>
+            <span className="text-[#8E918F] text-sm font-medium">新增紀錄</span>
+            <div className="w-8" />
+          </header>
+
+          <div className="flex-1 overflow-y-auto px-6 pb-32 space-y-8">
+            <div>
+              <p className="text-[#8E918F] text-sm mb-2 text-center">是什麼項目？</p>
+              <input type="text" value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder="例如：午餐、房租..." className="w-full bg-transparent text-xl text-[#5E6160] text-center border-b border-[#D1D1D1] pb-2 focus:outline-none focus:border-[#B4C5C8] placeholder-[#D1D1D1]" />
+            </div>
+            <div className="text-center">
+              <p className="text-[#8E918F] text-sm mb-2">金額</p>
+              <div className="flex justify-center items-baseline gap-2 text-[#5E6160]">
+                <span className="text-2xl font-light">NT$</span>
+                <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="bg-transparent text-5xl font-light w-40 text-center focus:outline-none placeholder-[#D1D1D1]" />
+              </div>
+            </div>
+            <div>
+              <p className="text-[#8E918F] text-sm mb-3 text-center">這筆花費的性質？</p>
+              <ToggleSwitch leftLabel="想要 (Want)" rightLabel="需要 (Need)" value={isNeed} onChange={setIsNeed} />
+            </div>
+            <div>
+              <p className="text-[#8E918F] text-sm mb-3 text-center">當下的感受是？</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {FEELING_TAGS.map(tag => {
+                  const isSelected = selectedFeelings.includes(tag);
+                  return (
+                    <button key={tag} onClick={() => { if (isSelected) setSelectedFeelings(prev => prev.filter(t => t !== tag)); else setSelectedFeelings(prev => [...prev, tag]); }} className={`px-4 py-2 rounded-full text-sm transition-all border ${isSelected ? 'bg-[#5E6160] text-white border-[#5E6160]' : 'bg-white text-[#5E6160] border-[#E0E0E0] hover:border-[#B4C5C8]'}`}>
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-2xl p-4 border border-[#E0E0E0] focus-within:border-[#B4C5C8] transition-colors">
+               <div className="flex items-start gap-3">
+                  <div className="pt-1 text-[#8E918F]"><Edit3 size={18} /></div>
+                  <textarea 
+                    value={customNote}
+                    onChange={(e) => setCustomNote(e.target.value)}
+                    placeholder="寫下此刻的想法... (選填)"
+                    className="w-full bg-transparent text-[#5E6160] placeholder-[#D1D1D1] text-sm resize-none focus:outline-none"
+                    rows="2"
+                  />
+               </div>
+            </div>
+          </div>
+          
+          <div className="absolute bottom-6 left-6 right-6">
+             <Button onClick={handleAddTransaction}>記錄並放下</Button>
+          </div>
+        </div>
+      );
+
+      const CalendarView = () => {
+        const calendarData = getCalendarData();
+        
+        // 2026/01 configuration
+        const year = 2026;
+        const month = 0; // Jan (0-indexed)
+        const daysInMonth = 31;
+        // Jan 1 2026 is Thursday (4), so 4 empty slots
+        const firstDayOfWeek = 4;
+
+        return (
+          <div className={`w-full max-w-md h-full bg-[#F4F4F2] flex flex-col relative`}>
+            <header className="flex-none pt-12 px-6 flex justify-between items-center mb-4">
+              <button onClick={() => setView('home')} className="p-2 -ml-2 rounded-full hover:bg-black/5"><X size={24} className="text-[#5E6160]" /></button>
+              <span className="text-[#8E918F] text-sm font-medium">2026年 1月</span>
+              <button className="p-2 text-[#5E6160]"><MoreHorizontal size={24}/></button>
+            </header>
+            
+            <div className="flex-1 overflow-y-auto px-6 pb-24">
+              <div className="bg-white rounded-[32px] p-6 shadow-sm mb-6">
+                <div className="grid grid-cols-7 gap-y-6 gap-x-2 text-center mb-2">
+                  {['日','一','二','三','四','五','六'].map(d => <span key={d} className="text-xs text-[#8E918F]">{d}</span>)}
+                </div>
+                <div className="grid grid-cols-7 gap-y-4 gap-x-2">
+                  {/* Empty slots for days before 1st */}
+                  {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
+                  
+                  {/* Days 1-31 */}
+                  {Array.from({length: daysInMonth}, (_, i) => {
+                     const dayNum = i + 1;
+                     const dayData = calendarData.find(d => d.day === dayNum);
+                     const isToday = dayNum === 5; // Highlight 5th as "Today" simulation
+                     
+                     return (
+                      <button key={dayNum} onClick={() => dayData && setSelectedDay(dayData)} className="flex flex-col items-center gap-1 group">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all 
+                          ${isToday ? 'ring-2 ring-[#5E6160] ring-offset-1 font-bold' : ''} 
+                          ${selectedDay?.day === dayNum ? 'scale-110 ring-2 ring-[#B4C5C8]' : ''} 
+                          ${dayData ? colors.moodColors[dayData.mood] : 'bg-transparent text-[#D1D1D1]'} text-white/90 shadow-sm relative`}>
+                          <span className={dayData ? 'text-white' : 'text-[#5E6160]'}>{dayNum}</span>
+                        </div>
+                      </button>
+                     )
+                  })}
+                </div>
+              </div>
+              {selectedDay ? (
+                <div className="animate-slide-up mb-6">
+                   <h3 className="text-[#5E6160] font-medium mb-3 flex items-center gap-2"><span>1月{selectedDay.day}日</span><span className="text-xs px-2 py-1 bg-[#F0F0F0] rounded-full text-[#8E918F]">心情：{MOODS.find(m => m.id === selectedDay.mood)?.label}</span></h3>
+                   <Card className="space-y-4">
+                      <div className="flex justify-between items-center pb-2 border-b border-[#F0F0F0]"><span className="text-[#8E918F] text-sm">總支出</span><span className="text-[#5E6160] font-semibold">NT$ {selectedDay.spend}</span></div>
+                      <div className="space-y-4">
+                         {selectedDay.items.map((item, idx) => (
+                           <div key={idx}>
+                             <div className="flex justify-between items-center">
+                                <div className="flex flex-col"><span className="text-[#5E6160] text-sm">{item.name}</span><span className="text-[10px] text-[#B4C5C8]">{item.feeling}</span></div><span className="text-[#5E6160] text-sm">-{item.amount}</span>
+                             </div>
+                             {item.note && <p className="text-xs text-[#8E918F] mt-1 pl-2 border-l-2 border-[#E0E0E0]">{item.note}</p>}
+                           </div>
+                         ))}
+                      </div>
+                   </Card>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-[#8E918F] opacity-60 py-10"><CalendarIcon size={48} className="mb-2" strokeWidth={1}/><p className="text-sm">尚未有紀錄或點擊日期</p></div>
+              )}
+              <Button variant="secondary" onClick={() => setView('insights')}>查看本月流動總結</Button>
+            </div>
+          </div>
+        );
+      };
+
+      const InsightsView = () => (
+        <div className={`w-full max-w-md h-full bg-[#F4F4F2] flex flex-col relative`}>
+          <header className="flex-none pt-12 px-6 flex justify-between items-center mb-6">
+            <button onClick={() => setView('calendar')} className="p-2 -ml-2 rounded-full hover:bg-black/5"><ChevronRight size={24} className="text-[#5E6160] rotate-180" /></button>
+            <span className="text-[#8E918F] text-sm font-medium">1月總結</span>
+            <button onClick={handleExport} className="p-2 -mr-2 rounded-full hover:bg-black/5 text-[#5E6160]"><Share size={20} /></button>
+          </header>
+          <div className="flex-1 overflow-y-auto px-6 pb-24 space-y-6">
+             <Card>
+               <h4 className="text-[#5E6160] font-medium mb-4 flex items-center gap-2"><Wallet size={18} /> 金錢流動</h4>
+               <div className="flex items-end gap-2 h-32 mb-4 px-4">
+                  <div className="w-1/3 bg-[#C4CEC2] h-[80%] rounded-t-lg relative group"><span className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-[#5E6160]">42k</span><p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">收</p></div>
+                  <div className="w-1/3 bg-[#D8C4C1] h-[60%] rounded-t-lg relative"><p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">支</p></div>
+                  <div className="w-1/3 bg-[#E6DED6] h-[20%] rounded-t-lg relative"><p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-[#5E6160]">存</p></div>
+               </div>
+               <p className="text-xs text-[#8E918F] text-center">本月結餘：{calculateMonthlyBalance()}</p>
+             </Card>
+          </div>
+        </div>
+      );
+
+      const DebtView = () => {
+        const totalMonthlyPay = debts.reduce((acc, curr) => acc + parseInt(curr.monthlyPay || 0), 0);
+        const income = 42000; 
+        const essentialExpense = 15000;
+        const spendable = income - essentialExpense - totalMonthlyPay;
+
+        const updateDebt = (id, field, val) => {
+            const newDebts = debts.map(d => d.id === id ? { ...d, [field]: val } : d);
+            setDebts(newDebts);
+        };
+
+        const calculatePayoffDate = (remaining, monthly) => {
+            if (!monthly || monthly <= 0 || !remaining || remaining <= 0) return "---";
+            const monthsLeft = Math.ceil(remaining / monthly);
+            const today = new Date(); 
+            // Calculate future date from "Now" (simulated or real)
+            // Just use simple month addition for prototype
+            const future = new Date(today.getFullYear(), today.getMonth() + monthsLeft, 1);
+            return `${future.getFullYear()}年 ${future.getMonth() + 1}月`;
+        };
+
+        return (
+          <div className={`w-full max-w-md h-full bg-[#F4F4F2] flex flex-col relative`}>
+            <header className="flex-none pt-12 px-6 flex justify-between items-center mb-6">
+              <button onClick={() => setView('home')} className="p-2 -ml-2 rounded-full hover:bg-black/5"><X size={24} className="text-[#5E6160]" /></button>
+              <span className="text-[#8E918F] text-sm font-medium">還款規劃系統</span>
+              <div className="w-8" />
+            </header>
+            <div className="flex-1 overflow-y-auto px-6 pb-24 space-y-6">
+               <Card className="bg-[#5E6160] text-[#F4F4F2] border-none text-center py-8">
+                  <p className="text-[#B0B3B2] text-sm mb-2">扣除生存與還款後，每月真實可用</p>
+                  <h2 className="text-4xl font-light tracking-wide mb-4">NT$ {spendable.toLocaleString()}</h2>
+                  <p className="text-xs text-[#B0B3B2] px-8 leading-relaxed">這就是你的「安全花費界線」。<br/>只要控制在這裡面，債務就會自動消失。</p>
+               </Card>
+               <div>
+                 <h3 className="text-[#5E6160] font-medium mb-3 ml-2">目前的承諾 (債務)</h3>
+                 <div className="space-y-3">
+                    {debts.map(debt => (
+                      <Card key={debt.id} className="flex flex-col gap-3">
+                         <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                               <input className="font-medium text-[#5E6160] bg-transparent border-b border-transparent focus:border-[#B4C5C8] focus:outline-none w-full" value={debt.name} onChange={(e) => updateDebt(debt.id, 'name', e.target.value)} />
+                               <p className="text-xs text-[#8E918F] mt-1">{debt.date} 扣款 • 利率 {debt.interest}</p>
+                            </div>
+                            <div className="text-right">
+                               <div className="flex items-center justify-end gap-1">
+                                 <span className="text-[#5E6160] font-medium">- </span>
+                                 <input 
+                                    type="number"
+                                    className="text-[#5E6160] font-medium bg-transparent border-b border-transparent focus:border-[#B4C5C8] focus:outline-none w-20 text-right"
+                                    value={debt.monthlyPay}
+                                    onChange={(e) => updateDebt(debt.id, 'monthlyPay', e.target.value)}
+                                 />
+                                 <span className="text-[#5E6160] font-medium"> / 月</span>
+                               </div>
+                               <div className="flex items-center justify-end gap-1 mt-1">
+                                 <span className="text-[10px] text-[#B4C5C8]">剩餘 </span>
+                                 <input 
+                                    type="number"
+                                    className="text-[10px] text-[#B4C5C8] bg-transparent border-b border-transparent focus:border-[#B4C5C8] focus:outline-none w-16 text-right"
+                                    value={debt.remaining}
+                                    onChange={(e) => updateDebt(debt.id, 'remaining', e.target.value)}
+                                 />
+                               </div>
+                            </div>
+                         </div>
+                         <div className="w-full bg-[#F0F0F0] h-1.5 rounded-full overflow-hidden"><div className="h-full bg-[#D8C4C1]" style={{ width: `${(1 - (debt.remaining/(debt.total || debt.remaining || 1)))*100}%` }} /></div>
+                         
+                         {/* New: Payoff Date Projection */}
+                         <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed border-[#F0F0F0]">
+                            <Flag size={14} className="text-[#B4C5C8]" />
+                            <span className="text-xs text-[#8E918F]">預計結清：</span>
+                            <span className="text-xs font-medium text-[#5E6160]">
+                               {calculatePayoffDate(debt.remaining, debt.monthlyPay)}
+                            </span>
+                         </div>
+                      </Card>
+                    ))}
+                 </div>
+               </div>
+               <Button variant="outline" onClick={handleAddDebt} className="border-dashed border-[#B4C5C8] text-[#8E918F]">+ 新增一筆規劃 (點擊後可編輯名稱)</Button>
+            </div>
+          </div>
+        );
+      };
+
+      const RealityView = () => {
+        const totalSafetyNet = parseInt(savings) + parseInt(investments) + calculateMonthlyBalance();
+        return (
+          <div className={`w-full max-w-md h-full bg-[#F4F4F2] flex flex-col relative`}>
+            <header className="flex-none pt-12 px-6 flex justify-between items-center mb-8">
+              <button onClick={() => setView('home')} className="p-2 -ml-2 rounded-full hover:bg-black/5"><X size={24} className="text-[#5E6160]" /></button>
+              <span className="text-[#8E918F] text-sm font-medium">Reality Mode</span>
+              <div className="w-8" />
+            </header>
+            <div className="flex-1 overflow-y-auto px-6 pb-24 space-y-8">
+              <div className="text-center"><p className="text-[#5E6160] text-lg font-light mb-2">心理安全網計算</p><p className="text-[#8E918F] text-sm">這是你真正的底氣。</p></div>
+              <Card className="space-y-6">
+                 <div className="space-y-4">
+                   <div><label className="text-xs text-[#8E918F] mb-1 block">現有存款 (可隨時動用)</label><div className="flex items-center gap-2 border-b border-[#E0E0E0] pb-2"><span className="text-[#5E6160]">NT$</span><input type="number" value={savings} onChange={(e) => setSavings(e.target.value)} className="flex-1 bg-transparent text-lg text-[#5E6160] focus:outline-none" /></div></div>
+                   <div><label className="text-xs text-[#8E918F] mb-1 block">本月結餘 (自動計算)</label><div className="flex items-center gap-2 border-b border-[#E0E0E0] pb-2"><span className="text-[#B4C5C8]">+</span><span className="text-[#5E6160]">NT$</span><span className="text-lg text-[#5E6160]">{calculateMonthlyBalance().toLocaleString()}</span></div></div>
+                   <div><label className="text-xs text-[#8E918F] mb-1 block">投資金額 (變現需時間)</label><div className="flex items-center gap-2 border-b border-[#E0E0E0] pb-2"><span className="text-[#B4C5C8]">+</span><span className="text-[#5E6160]">NT$</span><input type="number" value={investments} onChange={(e) => setInvestments(e.target.value)} className="flex-1 bg-transparent text-lg text-[#5E6160] focus:outline-none" /></div></div>
+                 </div>
+                 <div className="pt-4 border-t border-[#F0F0F0]">
+                    <div className="flex justify-between items-end"><span className="text-[#5E6160] font-medium">總安全網</span><span className="text-3xl text-[#5E6160] font-light">${totalSafetyNet.toLocaleString()}</span></div>
+                    <div className="w-full bg-[#F0F0F0] rounded-full h-2 mt-3 overflow-hidden"><div className="h-full bg-[#C4CEC2] w-[60%]" /></div>
+                 </div>
+              </Card>
+              <div className="bg-white/50 p-6 rounded-2xl text-center"><p className="text-[#5E6160] text-sm leading-relaxed">「這些數字不是為了評價你，<br/>而是為了告訴你：你有選擇，你是安全的。」</p></div>
+            </div>
+          </div>
+        );
+      };
+
+      const ExportModal = () => (
+        <div className={`absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/20 backdrop-blur-sm ${showExportModal ? 'block' : 'hidden'}`}>
+           <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-fade-in">
+              <div className="flex justify-between items-center mb-4"><h3 className="text-[#5E6160] font-medium flex items-center gap-2"><FileText size={20} /> 月報表已生成</h3><button onClick={() => setShowExportModal(false)} className="p-1 rounded-full hover:bg-gray-100"><X size={20} className="text-[#8E918F]"/></button></div>
+              <div className="bg-[#F4F4F2] p-4 rounded-xl text-xs text-[#5E6160] h-64 overflow-y-auto whitespace-pre-wrap font-mono mb-4 border border-[#E0E0E0]">{exportText}</div>
+              <Button variant="primary" onClick={copyToClipboard} className={isCopied ? 'bg-[#C4CEC2]' : ''}>{isCopied ? <><CheckCircle size={18} /> 已複製到剪貼簿</> : <><Copy size={18} /> 複製並傳送給教練</>}</Button>
+           </div>
+        </div>
+      );
+
+      return (
+        <div className={`w-full max-w-md h-full flex flex-col mx-auto relative shadow-2xl overflow-hidden`}>
+            {showExportModal && <ExportModal />}
+            <main className="flex-1 w-full h-full relative">
+              {view === 'splash' && <SplashScreen />}
+              {view === 'home' && <HomeView />}
+              {view === 'transaction' && <TransactionView />}
+              {view === 'calendar' && <CalendarView />}
+              {view === 'insights' && <InsightsView />}
+              {view === 'debt' && <DebtView />}
+              {view === 'reality' && <RealityView />}
+            </main>
+            {view === 'home' && (
+              <div className="absolute bottom-0 left-0 w-full bg-white/90 backdrop-blur-md border-t border-[#F0F0F0] py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] px-8 z-50">
+                <div className="flex justify-between items-center text-[#8E918F]">
+                  <button className="flex flex-col items-center gap-1 text-[#5E6160]"><Home size={24} strokeWidth={2} /><span className="text-[10px] font-medium">Home</span></button>
+                  <button onClick={() => setView('transaction')} className="bg-[#5E6160] text-white p-4 rounded-full shadow-lg shadow-[#5E6160]/20 transform -translate-y-6 hover:scale-105 transition-transform"><Plus size={24} /></button>
+                  <button onClick={() => setView('reality')} className="flex flex-col items-center gap-1 hover:text-[#5E6160]"><TrendingUp size={24} strokeWidth={2} /><span className="text-[10px] font-medium">Reality</span></button>
+                </div>
+              </div>
+            )}
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
